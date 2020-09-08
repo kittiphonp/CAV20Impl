@@ -16,6 +16,9 @@ Our CAV'20 paper is available at [Springer](https://doi.org/10.1007/978-3-030-53
 
 
 # How to reproduce the experimental result
+The following procedure is checked on Debian 9 with 
+openJDK 11.0.8 and python 3.5.3.
+
 1. Download the repository and put it to any directory
 2. Open `$yourRoot/scripts/env.sh` and change the description of myRoot to the root of the repository
 3. Open terminal, do `cd $yourRoot/scripts` and `./make.sh` to compile the codes
@@ -36,15 +39,17 @@ When you run the script `generate_mytable1.sh`, the following files will be crea
 
 
 # The code
-The source code of each implementation can be found in `mycode/$ALGO_NAME/src`
-Our BVI technique via Widest Path Problem appears in `mycode/WP/src/explicit/STPGModelChecker.java`
-See the method 'computeReachProbsValIterBounded' (Line 2107-2419).
+Each of the directory `mycode/$ALGO_NAME` is a modification of the source file of PRISM-games 2.0 (https://www.prismmodelchecker.org/games/download.php).
+
+The java source code of each implementation can be found in `mycode/$ALGO_NAME/src`. 
+Our BVI technique via Widest Path Problem appears in `mycode/WP/src/explicit/STPGModelChecker.java`, 
+see the method 'computeReachProbsValIterBounded' (Line 2107-2419).
 
 The code in `mycode/genGraph` is used to compute the number of End Components (ECs); see also `countEC.py` below.
 
 
 # The scripts (and an auxiliary code)
-In the folder scripts there are three shell-scripts.
+In the folder `scripts` there are the following shell-scripts and an python code.
 
 - `env.sh`                ... it contains the root directory information used in other scripts.
 - `make.sh`               ... it runs `make` for each implementation.
@@ -66,7 +71,7 @@ In the folder scripts there are three shell-scripts.
 
 
 # The log files
-The log directory (`mydata`) is created when you execute the script `generate_mytable1.sh`.
+The log directory `mydata` is created when you execute the script `generate_mytable1.sh`.
 For each model and algorithm, the following log files are created:
 
 - .log file  ... the log produced by the main code

@@ -1,4 +1,4 @@
-. ./../env.sh
+. ./../../scripts/env.sh
 
 echo $myRoot
 code=( DFL DFL_m WP genGraph )
