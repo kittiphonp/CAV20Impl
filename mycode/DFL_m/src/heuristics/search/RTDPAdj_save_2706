@@ -1,0 +1,716 @@
+package heuristics.search;
+
+import explicit.*;
+import heuristics.CachedModelExplorer;
+import heuristics.HeuristicsSMGModelChecker;
+import heuristics.nextstate.HeuristicNextState;
+import heuristics.update.StateUpdate;
+import parser.State;
+import parser.ast.Expression;
+import parser.ast.ExpressionPATL;
+import prism.ModelType;
+import prism.PrismException;
+
+import java.util.*;
+
+/**
+ * Created by maxi on 5/28/17.
+ * Based on the code by mateusz-ujma for his thesis "On Verification and Controller Synthesis for Probabilistic Systems at Runtime"
+ */
+public class HeuristicRTDP_Adj extends Heuristic{
+
+    private long modelCheckingTime = 0;
+    private boolean precomp = false;
+    private Set<State> seen = new HashSet<State>();
+    private int buildPartialEvery = 100000;//default 100000
+    private int precompCount = 0;
+    private int precompThreshold = 15;
+    //private MDPSimple mdp = new MDPSimple();
+    private SMG smg = new SMG();
+    public void setCoalition(Set<Integer> coalition){
+        try {
+            smg.setCoalitionInts(coalition);
+        }
+        catch(PrismException e){
+            System.err.println("Error when initializing HeuristicRTDP_Adj: couldn't set coalition.");
+            e.printStackTrace();
+        }
+
+    }
+    private Map<State, Integer> state2Index = new HashMap<State, Integer>();
+    private BitSet unvisited = new BitSet();
+
+
+    private final Deque<State> visited = new ArrayDeque<>();
+    private boolean seenChanged = false;
+    private final int mecCollapseThreshold = 10;
+    private int mecCollapseCount = 0;
+    private static final int PROGRESS_REPORT_TRIALS = 1000;
+
+    public HeuristicRTDP_Adj(HeuristicsSMGModelChecker mc, StateUpdate su, HeuristicNextState nextState, ModelExplorer pme, boolean min) throws PrismException {
+        super(mc, su, nextState, pme, min);
+        if(precomp) {
+            preComp();
+        }
+    }
+
+    @Override
+    protected void heuristicStart() throws PrismException{
+        modelCheckingTime = System.currentTimeMillis();
+    }
+
+    @Override
+    protected void heuristicStop() throws PrismException{
+        long duration = System.currentTimeMillis() - modelCheckingTime;
+        mc.getLog().println();
+        mc.getLog().println("Heuristic RTDP_Adj model checking time in " + ((double)duration/1000)  + " secs.");
+    }
+
+
+
+    //old comment; TODO: look into this when I'm done with basics <= important now! what happens with min, max and minmax?prism examples/models/mer/mer2_2_full.nm examples/models/mer/mer.pctl -ex -const ''n=3000,x=0.0001,K=30'' -prop 2 -heuristic RTDP_ADJ -next_state HIGH_PROB -heuristic_verbose
+    //min is never used; but most probably it should be; look what happens if pctl contains min, max or minmax
+    //looks like p1 is always maxing and p2 always minning, or sth; maxmin and minmax dont change behaviour
+    //however, since updatePrecomp does use min, we can achieve nontermination, since updatePrecomp says were done (have 0 node), but update(s) picks a maximizing action
+    //21.06: taken from tobi
+    //21.06.: Tobis code (and Mateusz') break explore the first time they see a state twice (to update more often?). They only do collapse every 1000 steps
+    //  should we rather explore, until we see one state 5 (or 1000) times, and then break explore, adjust, back to explore?
+    @Override
+    public void heuristicStep(State state) throws PrismException {
+        State currentState = state;
+
+        // EXPLORE Phase
+        while (!stateUpdate.isTarget(currentState) && !stateUpdate.isZero(currentState) && !visited.contains(currentState)) {
+            // Update the Q value for the state and fetch the epsilon-close best action
+            seenChanged |= seen.add(currentState);
+            visited.addLast(currentState);
+
+            int bestAction = stateUpdate.update(currentState);
+            currentState = nextState.sample(currentState, bestAction);
+
+            // precomp code was here, see e.g. commit dc44b4f01e7cb46fb249993186bf55377da530d7
+            trialSteps++;
+        }
+
+        stateUpdate.setTargetOrZeroValue(currentState);
+
+        if (visited.contains(currentState)) {
+            mecCollapseCount++;
+            if (mecCollapseCount > mecCollapseThreshold) {
+                // Construct partialMDP from all the states seen so far
+                updatePrecomp();
+
+                // Search for MECs in the partial MDP and collapse them
+                //collapseMECs();
+
+                //adjust probabilities
+                adjustProbabilities(smg);
+                //empty visited, so we can jump to explore again
+                visited.removeAll(new ArrayDeque<>(visited));
+                mecCollapseCount = 0;
+
+                //back to explore
+                return;
+            }
+        }
+
+        // UPDATE Phase
+        while (!visited.isEmpty()) {
+            State visitedState = visited.removeLast();
+            // Upper and lower bounds are propagated from the successors
+            stateUpdate.update(visitedState);
+        }
+
+        if ((trials + 1) % PROGRESS_REPORT_TRIALS == 0) {
+            reportProgress(trials, trialSteps);
+        }
+        trials++;
+    }
+
+    @Override
+    public boolean isDone() throws PrismException {
+        StateValue sv = stateUpdate.getQValue(initialState);
+        if(sv != null) {
+            double lowerBoundInitialState = sv.getLowerBound();
+            double upperBoundInitialState = sv.getUpperBound();
+            return stateUpdate.same(lowerBoundInitialState, upperBoundInitialState);
+        }
+        return false;
+    }
+
+    //from pranav
+    private void updatePrecomp() throws PrismException{
+        SMGModelChecker smgModelChecker = getMC();
+        smg = buildPartialModel();
+        smg.findDeadlocks(true);
+        BitSet target = computeTarget(smgModelChecker, smg);
+
+        BitSet prob0Target = new BitSet();
+        prob0Target.or(target);
+        prob0Target.or(unvisited);
+
+        BitSet prob0 = computeProb0(smgModelChecker, smg, prob0Target);
+        for (int i = prob0.nextSetBit(0); i >= 0; i = prob0.nextSetBit(i+1)) {
+            State s = smg.getStatesList().get(i);
+            stateUpdate.setZero(s, true);
+        }
+		BitSet prob1 = computeProb1(smgModelChecker, smg, target);
+		for (int i = prob1.nextSetBit(0); i >= 0; i = prob1.nextSetBit(i+1)) {
+			State s = smg.getStatesList().get(i);
+			if(seen.contains(s)) {
+				stateUpdate.setTarget(s, true);
+			}
+		}
+        if(pme.getModelType() == ModelType.SMG) {
+            //collapseMECs(smg, unvisited);
+        }
+        if(pme.getModelType() == ModelType.MDP && !min) {
+            //collapseMECs(smg, unvisited);
+        }
+
+        if(precomp) {
+            //compareWithPreComp(smg, prob0,prob1);
+        }
+    }
+
+    private void updatePrecompOld() throws PrismException{
+//        //TODO: Adjust to smg
+//        SMGModelChecker smgModelChecker = getSMG();
+//        MDPSimple mdp = buildPartialModel();
+//        mdp.findDeadlocks(true);
+//        BitSet target = computeTarget(mdpModelChecker, mdp);
+//
+//        if(min) {
+//            BitSet t = new BitSet();
+//            t.or(target);
+//            t.or(unvisited);
+//            BitSet prob0 = computeProb0(mdpModelChecker, mdp, t);
+//            for (int i = prob0.nextSetBit(0); i >= 0; i = prob0.nextSetBit(i+1)) {
+//                State s = mdp.getStatesList().get(i);
+//                stateUpdate.setQValue(s, new StateValue(0, 0));
+//                stateUpdate.setZero(s, true);
+//            }
+//            BitSet prob1 = computeProb1(mdpModelChecker, mdp, target);
+//            for (int i = prob1.nextSetBit(0); i >= 0; i = prob1.nextSetBit(i+1)) {
+//                State s = mdp.getStatesList().get(i);
+//                if(seen.contains(s)) {
+//                    stateUpdate.setQValue(s, new StateValue(1, 1));
+//                    stateUpdate.setTarget(s, true);
+//                }
+//            }
+//        } else {
+//            target.or(unvisited);
+//            BitSet prob0 = computeProb0(mdpModelChecker, mdp, target);
+//            for (int i = prob0.nextSetBit(0); i >= 0; i = prob0.nextSetBit(i+1)) {
+//                State s = mdp.getStatesList().get(i);
+//                if(seen.contains(s)) {
+//                    stateUpdate.setQValue(s, new StateValue(0, 0));
+//                    stateUpdate.setZero(s, true);
+//                }
+//            }
+//			/*BitSet prob1 = computeProb1(mdpModelChecker, mdp, target);
+//			for (int i = prob1.nextSetBit(0); i >= 0; i = prob1.nextSetBit(i+1)) {
+//				State s = mdp.getStatesList().get(i);
+//				if(seen.contains(s)) {
+//					stateUpdate.setQValue(s, new StateValue(1, 1));
+//					stateUpdate.setTarget(s, true);
+//				}
+//			}*/
+//            collapseMECs(mdp);
+//        }
+    }
+
+
+
+    private MDPSimple buildPartialModelold() throws PrismException{
+        //TODO: Adjust to smg
+//        List<State> statesList = mdp.getStatesList();
+//        if(statesList == null) {
+//            statesList = new ArrayList<State>();
+//        }
+//        unvisited.clear();
+//        if(mdp.getFirstInitialState() == -1) {
+//            int index = mdp.addState();
+//            mdp.addInitialState(index);
+//            state2Index.put(initialState, index);
+//            statesList.add(initialState);
+//        }
+//        Iterator<State> it = seen.iterator();
+//        while(it.hasNext()) {
+//            State s = it.next();
+//            Integer index = state2Index.get(s);
+//            if(index == null) {
+//                index = mdp.addState();
+//                state2Index.put(s, index);
+//                statesList.add(s);
+//            }
+//            List<Distribution> dists = buildAllDistributionsIn_old(mdp, s, seen, statesList);
+//            mdp.clearState(index);
+//            for(int i=0;i<dists.size();i++) {
+//                mdp.addChoice(index, dists.get(i));
+//            }
+//        }
+//        mdp.setStatesList(statesList);
+//        mc.getLog().println("Model built " + mdp.getNumStates());
+//        mc.getLog().flush();
+//        return mdp;
+        return null;
+    }
+
+    private SMG buildPartialModel() throws PrismException{
+        List<State> statesList = smg.getStatesList();
+        if(statesList == null) {
+            statesList = new ArrayList<State>();
+        }
+        unvisited.clear();
+        if(smg.getFirstInitialState() == -1) {
+            //Empty model
+            int index = smg.addState();
+            smg.addInitialState(index);
+            state2Index.put(initialState, index);
+            statesList.add(initialState);
+
+            pme.queryState(initialState);
+            smg.setPlayer(index, pme.getPlayerForState());
+        }
+        Iterator<State> it = seen.iterator();
+        while(it.hasNext()) {
+            State s = it.next();
+            Integer index = state2Index.get(s);
+            if(index == null) {
+                index = smg.addState();
+                state2Index.put(s, index);
+                statesList.add(s);
+
+                pme.queryState(s);
+                smg.setPlayer(index, pme.getPlayerForState());
+            }
+            List<Distribution> dists = buildAllDistributions(smg, s, statesList);
+            smg.clearState(index);
+            for(int i=0;i<dists.size();i++) {
+                smg.addChoice(index, dists.get(i));
+            }
+        }
+        smg.setStatesList(statesList);
+        mc.getLog().println("Model built with " + smg.getNumStates() + " states");
+        long duration = System.currentTimeMillis() - modelCheckingTime;
+        mc.getLog().println("Global timer: " + ((double)duration/1000)  + " secs.");
+        mc.getLog().flush();
+        return smg;
+    }
+
+    private List<Distribution> buildAllDistributionsIn_old(MDPSimple mdp, State s, Set<State> seen, List<State> statesList) throws PrismException{
+        //TODO: Adjust to SMG
+        List<Distribution> dists = new ArrayList<Distribution>();
+        pme.queryState(s);
+        int choices = pme.getNumChoices();
+        for(int i=0;i<choices;i++) {
+            Distribution d = new Distribution();
+            int trans = pme.getNumTransitions(i);
+            boolean inSeen = false;
+            for(int j=0;j<trans;j++) {
+                double prob = pme.getTransitionProbability(i, j);
+                State t = pme.computeTransitionTarget(i,j);
+                inSeen = inSeen || seen.contains(t);
+                Integer index = state2Index.get(t);
+                if(index == null) {
+                    index = mdp.addState();
+                    state2Index.put(t, index);
+                    statesList.add(t);
+                }
+                d.add(index, prob);
+                if(!seen.contains(t)) {
+                    unvisited.set(index);
+                }
+            }
+            dists.add(d);
+        }
+        return dists;
+    }
+
+    private List<Distribution> buildAllDistributionsIn(SMG smg, State s, Set<State> seen, List<State> statesList) throws PrismException{
+        List<Distribution> dists = new ArrayList<Distribution>();
+        pme.queryState(s);
+        int choices = pme.getNumChoices();
+        for(int i=0;i<choices;i++) {
+            pme.queryState(s);
+            Distribution d = new Distribution();
+            int trans = pme.getNumTransitions(i);
+            boolean inSeen = false;
+            for(int j=0;j<trans;j++) {
+                pme.queryState(s);
+                double prob = pme.getTransitionProbability(i, j);
+                State t = pme.computeTransitionTarget(i,j);
+                inSeen = inSeen || seen.contains(t);
+                Integer index = state2Index.get(t);
+                if(index == null) {
+                    index = smg.addState();
+                    state2Index.put(t, index);
+                    statesList.add(t);
+
+                    pme.queryState(t);
+                    smg.setPlayer(index, pme.getPlayerForState());
+                }
+                d.add(index, prob);
+                if(!seen.contains(t)) {
+                    unvisited.set(index);
+                }
+            }
+            dists.add(d);
+        }
+        return dists;
+    }
+
+    //created this, since I want my partial model to have all transitions for all states available; to check, whether there is one leaving the MEC
+    private List<Distribution> buildAllDistributions(SMG smg, State s, List<State> statesList) throws PrismException{
+        List<Distribution> dists = new ArrayList<Distribution>();
+        pme.queryState(s);
+        int choices = pme.getNumChoices();
+        for(int i=0;i<choices;i++) {
+            pme.queryState(s);
+            Distribution d = new Distribution();
+            int trans = pme.getNumTransitions(i);
+            for(int j=0;j<trans;j++) {
+                pme.queryState(s);
+                double prob = pme.getTransitionProbability(i, j);
+                State t = pme.computeTransitionTarget(i,j);
+                Integer index = state2Index.get(t);
+                if(index == null) {
+                    index = smg.addState();
+                    state2Index.put(t, index);
+                    statesList.add(t);
+
+                    pme.queryState(t);
+                    smg.setPlayer(index, pme.getPlayerForState());
+                }
+                d.add(index, prob);
+                if(!seen.contains(t)) {
+                    unvisited.set(index);
+                }
+            }
+            dists.add(d);
+        }
+        return dists;
+    }
+
+    private void preComp() {
+//        //TODO: Adjust to SMG, maybe drop this?
+//        try {
+//            ConstructModel constructModel = new ConstructModel(mc, mc.getEngine(), null, null);
+//            MDP mdp = (MDP)constructModel.constructModel(mc.getModulesFile());
+//            MDPModelChecker mdpModelChecker = getMC();
+//            BitSet target = computeTarget(mdpModelChecker, mdp);
+//            BitSet zero = computeProb0(mdpModelChecker, mdp, target);
+//            BitSet one = computeProb1(mdpModelChecker, mdp, target);
+//
+//            List<State> statesList = mdp.getStatesList();
+//            for(int i=0;i<statesList.size();i++) {
+//                State s = statesList.get(i);
+//                if(target.get(i) || one.get(i)) {
+//                    stateUpdate.setTarget(s, true);
+//                } else {
+//                    stateUpdate.setTarget(s, false);
+//                }
+//                if(zero.get(i)) {
+//                    stateUpdate.setZero(s, true);
+//                }
+//                pme.queryState(s);
+//            }
+//            if(!min) {
+//                collapseMECs(mdp);
+//            }
+//        } catch(PrismException e) {
+//            mc.getLog().print(e);
+//        }
+    }
+
+    private BitSet preCompTarget = new BitSet();
+    private BitSet preCompZero = new BitSet();
+    private BitSet preCompOne = new BitSet();
+    private SMG preCompSMG;
+    private Map<State,Integer> preCompSMGMapping = new HashMap<State,Integer>();
+
+//    private void preCompFullModel() throws PrismException{
+//        ConstructModel constructModel = new ConstructModel(mc, mc.getEngine(), mc.getProperty(), mc.getPropertiesFile());
+//        Model model = (Model)constructModel.constructModel(mc.getModulesFile(), false, false);
+//
+//        for(int i=0;i<model.getNumStates();i++) {
+//            preCompSMGMapping.put(model.getStatesList().get(i), i);
+//        }
+//        if(model instanceof SMG) {
+//            preCompSMG = (SMG)model;
+//            ExpressionPATL exp = (ExpressionPATL)mc.getProperty().getExpression();
+//            preCompSMG.setCoalition(exp.getCoalition());
+//        } else {
+//            if(model instanceof MDP) {
+//                preCompSMG = new SMG((MDPSimple)model);
+//            } else {
+//                throw new UnsupportedOperationException();
+//            }
+//        }
+//
+//        SMGModelChecker smgModelChecker = getMC();
+//        preCompTarget = computeTarget(smgModelChecker, preCompSMG);
+//        preCompZero = computeProb0(smgModelChecker, preCompSMG, preCompTarget);
+//        preCompOne = computeProb1(smgModelChecker, preCompSMG, preCompTarget);
+//
+//        List<State> statesList = preCompSMG.getStatesList();
+//        for(int i=0;i<statesList.size();i++) {
+//            State s = statesList.get(i);
+//            if(preCompTarget.get(i) || preCompOne.get(i)) {
+//                stateUpdate.setTarget(s, true);
+//            } else {
+//                stateUpdate.setTarget(s, false);
+//            }
+//            if(preCompZero.get(i)) {
+//                stateUpdate.setZero(s, true);
+//            }
+//            pme.queryState(s);
+//        }
+//        if(pme.getModelType() == ModelType.SMG) {
+//            //collapseMECs(preCompSMG, new BitSet());
+//        }
+//        if(pme.getModelType() == ModelType.MDP && !min) {
+//            //collapseMECs(preCompSMG, new BitSet());
+//        }
+//    }
+
+    private BitSet computeProb0(SMGModelChecker smgModelChecker, SMG smg, BitSet target) throws PrismException{
+        return smgModelChecker.prob0(smg, null, target, min, !min);
+    }
+
+    private BitSet computeProb1(SMGModelChecker smgModelChecker, SMG smg, BitSet target) throws PrismException{
+        return smgModelChecker.prob1(smg, null, target, min, !min);
+    }
+
+    private BitSet computeTarget(SMGModelChecker smgModelChecker, SMG smg) throws PrismException {
+        Expression targetExp = null;
+        if(mc.getExpression().getOperand1() != null) {
+            targetExp = mc.getExpression();
+        } else {
+            targetExp = mc.getExpression().getOperand2();
+        }
+        return smgModelChecker.checkExpression(smg, targetExp).getBitSet();
+    }
+
+
+    private BitSet computeProb0(MDPModelChecker mdpModelChecker, MDP mdp, BitSet target) throws PrismException{
+        //TODO: SMG
+        return mdpModelChecker.prob0(mdp, null, target, min, null);
+    }
+
+    private BitSet computeProb1(MDPModelChecker mdpModelChecker, MDP mdp, BitSet target) throws PrismException{
+        //TODO: SMG
+        return mdpModelChecker.prob1(mdp, null, target, min, null);
+    }
+
+    private BitSet computeTarget(MDPModelChecker mdpModelChecker, MDP mdp) throws PrismException {
+        //TODO: SMG
+        Expression targetExp = null;
+        if(mc.getExpression().getOperand1() != null) {
+            targetExp = mc.getExpression();
+        } else {
+            targetExp = mc.getExpression().getOperand2();
+        }
+        return mdpModelChecker.checkExpression(mdp, targetExp).getBitSet();
+    }
+
+    private MDPModelChecker getMCold() throws PrismException{
+        MDPModelChecker mdpModelChecker = new MDPModelChecker(mc);
+        mdpModelChecker.setModulesFileAndPropertiesFile(mc.getModulesFile(), mc.getPropertiesFile());
+        return mdpModelChecker;
+    }
+
+    private SMGModelChecker getMC() throws PrismException{
+        SMGModelChecker smgModelChecker = new SMGModelChecker(mc);
+        smgModelChecker.setModulesFileAndPropertiesFile(mc.getModulesFile(), mc.getPropertiesFile());
+        return smgModelChecker;
+    }
+
+
+    private void adjustProbabilities(SMG smg) throws PrismException {
+        //Adjust completely, change to new algo
+        mc.getLog().println("Starting adjusting probabilities");
+        mc.getLog().flush();
+        long start = System.currentTimeMillis();
+
+        //get BitSets for all states, and for all that are not one
+        BitSet all = new BitSet();
+        //I don't see why we need to ignore the ones which are not one (upper bound < 1.0); probably only in the case of 1 player ECs or sth like that.
+//        BitSet notOne = new BitSet();
+        for(int i=0;i<smg.getNumStates();i++) {
+            all.set(i);
+//            StateValue sv = stateUpdate.getQValue(smg.getStatesList().get(i));
+//            if(sv != null) {
+//                if(sv.getUpperBound() < 1.0) {
+//                    notOne.set(i);
+//                }
+//            }
+        }
+//        all.xor(notOne);
+        //compute MECs
+        explicit.ECComputer ec = explicit.ECComputer.createECComputer(mc, smg);
+        ec.computeMECStates(all);
+        List<BitSet> mecs = ec.getMECStates();
+
+        //for each MEC
+        for(int i=0;i<mecs.size();i++) {
+            BitSet mec = mecs.get(i);
+            //TODO: Is this correct?
+            //To avoid lots of useless work and make that thing with unleavable MECs work, I only look at MECs that have more than one state
+            if (mec.cardinality()==1){
+                continue;
+            }
+            List<Map<State, Double>> actions = getAllLeavingMEC(smg, mec);
+            //if there are actions leaving it
+            if(actions.size() > 0) {
+                //if it contains the target and we are maximizing
+                if(!min && containsTarget(smg, mec)) {
+                    for (int j = mec.nextSetBit(0); j >= 0; j = mec.nextSetBit(j+1)) {
+                        State s = smg.getStatesList().get(j);
+                        stateUpdate.setQValue(s, new StateValue(1.0, 1.0));
+                        stateUpdate.setTarget(s, true);
+                    }
+                }
+                //added this; if it contains 0 and we are minimizing
+                else if (min && containsZero(smg,mec)){
+                    for (int j = mec.nextSetBit(0); j >= 0; j = mec.nextSetBit(j+1)) {
+                        State s = smg.getStatesList().get(j);
+                        stateUpdate.setQValue(s, new StateValue(0, 0));
+                        stateUpdate.setZero(s, true);
+                    }
+                }
+                //a MEC somewhere on the path from start to end, hence we need to adjust probabilities
+                else {
+                    //fancy stuff of our algorithm
+                    adjustProbabilities(smg, mec);
+                }
+            } else { //no actions leaving, hence if not target in it, we have to make it 0
+                if(containsTarget(smg, mec)) {
+                    for (int j = mec.nextSetBit(0); j >= 0; j = mec.nextSetBit(j+1)) {
+                        State s = smg.getStatesList().get(j);
+                        stateUpdate.setQValue(s, new StateValue(1, 1));
+                        stateUpdate.setTarget(s, true);
+                    }
+                }
+                //added this
+                else { //in all cases else, because if it does not contain target, and cannot be left, it has 0 probability of reaching target; wrong, since we have the deadlock fixes
+                    for (int j = mec.nextSetBit(0); j >= 0; j = mec.nextSetBit(j+1)) {
+                        State s = smg.getStatesList().get(j);
+                        stateUpdate.setQValue(s, new StateValue(0, 0));
+                        stateUpdate.setZero(s, true);
+                    }
+                }
+            }
+        }
+        long duration = System.currentTimeMillis() - start;
+        mc.getLog().println("Adjusting probabilities done in " + (double)duration/1000 + " secs.");
+        mc.getLog().flush();
+    }
+
+    private boolean containsTarget(MDP mdp, BitSet mec) throws PrismException{
+        //TODO: SMG
+        for (int i = mec.nextSetBit(0); i >= 0; i = mec.nextSetBit(i+1)) {
+            State s = mdp.getStatesList().get(i);
+            if(stateUpdate.isTarget(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsTarget(SMG smg, BitSet mec) throws PrismException{
+        for (int i = mec.nextSetBit(0); i >= 0; i = mec.nextSetBit(i+1)) {
+            State s = smg.getStatesList().get(i);
+            if(stateUpdate.isTarget(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsZero(MDP mdp, BitSet mec) throws PrismException{
+        //TODO: SMG
+        for (int i = mec.nextSetBit(0); i >= 0; i = mec.nextSetBit(i+1)) {
+            State s = mdp.getStatesList().get(i);
+            if(stateUpdate.isZero(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void adjustProbabilities(SMG smg, BitSet mec) throws PrismException{
+        double bestUpperBoundSoFar = 0;
+        //find best outgoing upper bound belonging to player 1
+        for (int s = mec.nextSetBit(0); s >= 0; s = mec.nextSetBit(s+1)) {
+            if (smg.getPlayer(s)==1) {
+                for (int i = 0; i < smg.getNumChoices(s); i++) {
+                    boolean all = smg.allSuccessorsInSet(s, i, mec);
+                    if (!all) {
+                        double upperBound = stateUpdate.getUpperBoundActionValue(smg.getStatesList().get(s),i).getUpperBound();
+                        if (upperBound>bestUpperBoundSoFar){
+                            bestUpperBoundSoFar = upperBound;
+                        }
+                    }
+                }
+            }
+        }
+
+        //set all upper bounds to the best upper bound
+        for (int s = mec.nextSetBit(0); s >= 0; s = mec.nextSetBit(s+1)) {
+            StateValue formerValue = stateUpdate.getQValue(smg.getStatesList().get(s));
+            stateUpdate.setQValue(smg.getStatesList().get(s), new StateValue(formerValue.getLowerBound(),Math.min(formerValue.getUpperBound(),bestUpperBoundSoFar)));
+        }
+
+    }
+
+    private List<Map<State, Double>> getAllLeavingMEC(MDP mdp, BitSet mec) {
+        //TODO: SMG
+        List<Map<State, Double>> actions = new ArrayList<Map<State, Double>>();
+        for (int s = mec.nextSetBit(0); s >= 0; s = mec.nextSetBit(s+1)) {
+            for(int i = 0; i < mdp.getNumChoices(s);i++) {
+                boolean all = mdp.allSuccessorsInSet(s, i, mec);
+                if(!all) {
+                    actions.add(getDistribution(mdp, s, i));
+                }
+            }
+        }
+        return actions;
+    }
+
+    private Map<State, Double> getDistribution(MDP mdp, int s, int i) {
+        //TODO: SMG
+        Map<State, Double> d = new HashMap<State, Double>();
+        Iterator<Map.Entry<Integer,Double>> it =  mdp.getTransitionsIterator(s, i);
+        while(it.hasNext()) {
+            Map.Entry<Integer, Double> e = it.next();
+            d.put(mdp.getStatesList().get(e.getKey()), e.getValue());
+        }
+        return d;
+    }
+
+    private List<Map<State, Double>> getAllLeavingMEC(SMG smg, BitSet mec) {
+        List<Map<State, Double>> actions = new ArrayList<Map<State, Double>>();
+        for (int s = mec.nextSetBit(0); s >= 0; s = mec.nextSetBit(s+1)) {
+            for(int i = 0; i < smg.getNumChoices(s);i++) {
+                boolean all = smg.allSuccessorsInSet(s, i, mec);
+                if(!all) {
+                    actions.add(getDistribution(smg, s, i));
+                }
+            }
+        }
+        return actions;
+    }
+
+    private Map<State, Double> getDistribution(SMG smg, int s, int i) {
+        Map<State, Double> d = new HashMap<State, Double>();
+        Iterator<Map.Entry<Integer,Double>> it =  smg.getTransitionsIterator(s, i);
+        while(it.hasNext()) {
+            Map.Entry<Integer, Double> e = it.next();
+            d.put(smg.getStatesList().get(e.getKey()), e.getValue());
+        }
+        return d;
+    }
+
+}
