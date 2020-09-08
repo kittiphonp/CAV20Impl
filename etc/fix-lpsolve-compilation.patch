@@ -1,0 +1,130 @@
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc.osx
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc.osx	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc.osx	(revision 11216)
+@@ -20,7 +20,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lp_solve/ccc	(revision 11216)
+@@ -20,7 +20,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/cccLUSOL.osx
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/cccLUSOL.osx	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/cccLUSOL.osx	(revision 11216)
+@@ -17,7 +17,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.cygwin
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.cygwin	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.cygwin	(revision 11216)
+@@ -18,7 +18,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc	(revision 11216)
+@@ -28,7 +28,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c $CFLAGS /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.hp-ux
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.hp-ux	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.hp-ux	(revision 11216)
+@@ -18,7 +18,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx	(revision 11216)
+@@ -18,7 +18,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c -arch i386 /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.solaris
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.solaris	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.solaris	(revision 11216)
+@@ -18,7 +18,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.aix
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.aix	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.aix	(revision 11216)
+@@ -23,7 +23,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=
+Index: prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx64
+===================================================================
+--- prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx64	(revision 11215)
++++ prism/ext/lpsolve55/src/lp_solve_5.5/lpsolve55/ccc.osx64	(revision 11216)
+@@ -18,7 +18,7 @@
+ echo '#include <stdio.h>'>>/tmp/isnan.c
+ echo '#include <stdlib.h>'>>/tmp/isnan.c
+ echo '#include <math.h>'>>/tmp/isnan.c
+-echo 'main(){isnan(0);}'>>/tmp/isnan.c
++echo 'main(){isnan(0.0);}'>>/tmp/isnan.c
+ $c -arch x86_64 /tmp/isnan.c -o /tmp/isnan $math >/dev/null 2>&1
+ if [ $? = 0 ]
+ then NOISNAN=

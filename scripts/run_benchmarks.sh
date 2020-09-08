@@ -168,7 +168,7 @@ for solverName in DFL DFL-BRTDP_0 DFL_m WP EC; do
                 fi
             fi
 
-            timeout="15m"
+            timeout="1m"
 
             if [[ $solverName == "EC" ]] ; then
                 timeout="5m"
