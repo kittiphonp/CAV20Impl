@@ -34,7 +34,7 @@ openJDK 11.0.8 and python 3.5.3.
 
 When you run the script `generate_mytable1.sh`, the following files will be created:
 
-- `mytable1.txt` ... a reproduction of table1 in paper.pdf
+- `mytable1.txt` ... a reproduction of table1 in our paper
 - `mydata`       ... log file
 
 
@@ -49,7 +49,7 @@ The code in `mycode/genGraph` is used to compute the number of End Components (E
 
 
 # The scripts (and an auxiliary code)
-In the folder `scripts` there are the following shell-scripts and an python code.
+In the folder `scripts` there are the following shell-scripts and a python code.
 
 - `env.sh`                ... it contains the root directory information used in other scripts.
 - `make.sh`               ... it runs `make` for each implementation.
@@ -60,7 +60,7 @@ In the folder `scripts` there are the following shell-scripts and an python code
   -    The computation time reported in our CAV'20 paper is the time for BVI computation which does not include 
        the time for model construction and some shared pre- and post-computation. 
        Because of this, you may see a timeout even if your time budget is longer than the reported time in our CAV'20 paper.
-       This can be resoved by taking a longer time limit.
+       This can be resolved by taking a longer time limit.
   -    In Line 39, the number of repetitions for BRTDP is defined (it is a randomized algorithm). 
        We set the number to 2 for the sake of fast computation, while we did 5 repetitions in our paper.
 - `read_logs.sh`         ... it reads the generated log files and reproduces table1 in our paper. 
@@ -77,46 +77,46 @@ For each model and algorithm, the following log files are created:
 - .log file  ... the log produced by the main code
 - .stat file ... the log taken by the OS (the "/usr/bin/time" function)
 
-In `mydata/genGraph` the following files are also created:
+In `mydata/EC` the following files are also created:
 
 - .model file .. the graph data of the model which is used by `countEC.py`
 - .txt file  ... the output of `countEC.py`
 
 # Usage #
 One can conduct tests for specific models and algorithms as follows.
-Also you can find some options by executing `~/mycode/WP/bin/prism -help`
+Also you can find some options by executing `$yourRoot/mycode/WP/bin/prism -help`
 
 ## DFL 
 To use the implementation of BVI by [Kelmendi+, CAV'18], first
-cd ~/Desktop/mycode/DFL
-Then execute bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A
-e.g. bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A
+`cd $yourRoot/mycode/DFL`.
+Then execute `bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A`,
+e.g. `bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A`.
 
 ## DFL_m 
 To use the modification of DFL, first
-cd ~/Desktop/mycode/DFL_m
-Then execute bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A
-e.g. bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A
+`cd $yourRoot/mycode/DFL_m`.
+Then execute `bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A`,
+e.g. `bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A`.
 
 ## DFL_BRTDP 
 To use the implementation of BRTDP by [Kelmendi+, CAV'18], first
-cd ~/Desktop/mycode/DFL
-Then execute bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -heuristics RTDP_ADJ
-e.g. bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -heuristics RTDP_ADJ
+`cd $yourRoot/mycode/DFL`.
+Then execute `bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -heuristics RTDP_ADJ`,
+e.g. `bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -heuristics RTDP_ADJ`.
 
 ## WP
 To use the implementation of our WP algorithm, first 
-cd ~/Desktop/mycode/WP/
-Then execute bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A
-e.g. bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A
+`cd $yourRoot/mycode/WP/`.
+Then execute `bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A`,
+e.g. `bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A`.
 
 ## genGraph
 To generate the graph data of the model for `countEC.py`, first 
-cd ~/Desktop/mycode/WP/
-Then execute bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A
-e.g. bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A
+`cd $yourRoot/mycode/WP/`.
+Then execute `bin/prism ../../mymodels/$CHOOSEMODELFILE ../../mymodels/$CHOOSEPROPERTYFILE -BVI_A`,
+e.g. `bin/prism ../../mymodels/mdsm/mdsm.prism ../../mymodels/mdsm/mdsm.props -BVI_A`.
 
-This will generate model.txt in the current directory.
+This will generate `model.txt` in the current directory.
 
 
 # References 
